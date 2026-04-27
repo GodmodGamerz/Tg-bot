@@ -30,7 +30,6 @@ async def cmd_imagine(message: Message, bot: Bot):
         await message.answer("Usage: /imagine a cute cat astronaut")
         return
 
-    # Show loading with quote
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
