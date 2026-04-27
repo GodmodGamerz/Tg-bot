@@ -20,7 +20,7 @@ image_client = AsyncOpenAI(
 async def cmd_start(message: Message):
     await message.answer(
         "👋 Hi! I'm your AI assistant with real-time web search and image generation.\n\n"
-        "Just chat normally or use /imagine &lt;your prompt&gt;"
+        "Just chat normally or use /imagine <your prompt>"
     )
 
 @router.message(Command("imagine"))
