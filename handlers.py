@@ -9,11 +9,19 @@ from config import Config
 
 router = Router()
 logger = logging.getLogger(__name__)
-image_client = AsyncOpenAI(api_key=Config.OPENAI_API_KEY, base_url=Config.OPENAI_BASE_URL or "https://api.openai.com/v1")
+
+# Image client (same OpenAI-compatible client)
+image_client = AsyncOpenAI(
+    api_key=Config.OPENAI_API_KEY,
+    base_url=Config.OPENAI_BASE_URL or "https://api.openai.com/v1"
+)
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    await message.answer("👋 Hi! I'm an AI bot with real-time web search and image generation.\n\nJust send me any question or use /imagine <prompt>")
+    await message.answer(
+        "👋 Hi! I'm your AI assistant with real-time web search and image generation.\n\n"
+        "Just chat normally or use /imagine &lt;your prompt&gt;"
+    )
 
 @router.message(Command("imagine"))
 async def cmd_imagine(message: Message, bot: Bot):
@@ -22,12 +30,12 @@ async def cmd_imagine(message: Message, bot: Bot):
         await message.answer("Usage: /imagine a cute cat astronaut")
         return
 
-    # ⏳ loading with quote
+    # Show loading with quote
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
             message_id=message.message_id,
-            quote=prompt[:120]  # Telegram quote preview
+            quote=prompt[:120]
         )
     )
 
@@ -41,7 +49,6 @@ async def cmd_imagine(message: Message, bot: Bot):
         )
         image_url = response.data[0].url
 
-        # Delete loading and send image (edit to media is complex; cleanest UX)
         await bot.delete_message(loading.chat.id, loading.message_id)
         await message.answer_photo(
             photo=image_url,
