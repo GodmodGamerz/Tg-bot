@@ -5,14 +5,21 @@ from config import Config
 
 client = AsyncOpenAI(
     api_key=Config.OPENAI_API_KEY,
-    base_url=Config.OPENAI_BASE_URL
+    base_url=Config.OPENAI_BASE_URL or "https://api.openai.com/v1"
 )
 
 # ====================== ALIENLM SYSTEM PROMPT ======================
 SYSTEM_PROMPT = """You are AlienLM, a knowledgeable AI assistant.
 
 Answer directly and concisely. 
-Use **bold** for key terms. Never use markdown headers like ### or ##.
+
+FORMATTING RULES (CRITICAL):
+- You MUST use Telegram-supported HTML tags for formatting. Do NOT use markdown like ** or ##.
+- Use <b>text</b> for bolding key terms.
+- Use <i>text</i> for italics/emphasis.
+- Use <blockquote>text</blockquote> ONLY when highlighting a core concept, a rule, a quote, or an important summary. Do NOT wrap your whole response in it.
+- If you write math or code involving less-than or greater-than symbols, you MUST use &lt; and &gt; instead of < and > to prevent HTML parsing errors.
+
 Keep responses focused and not too long.
 Use a direct tone with no filler phrases (example: do not say "Great question!").
 Be honest: if you are uncertain, say "I'm not sure".
@@ -54,7 +61,8 @@ user_histories = {}
 user_models = {}
 
 def get_user_model(user_id: int) -> str:
-    return user_models.get(user_id, Config.DEFAULT_MODEL)
+    # Safely defaults to LLM_MODEL from Config if they haven't chosen one
+    return user_models.get(user_id, getattr(Config, 'LLM_MODEL', "meta/llama3-70b-instruct"))
 
 def set_user_model(user_id: int, model: str):
     user_models[user_id] = model
@@ -91,7 +99,8 @@ async def process_prompt(user_id: int, prompt: str) -> str:
         for tool_call in msg.tool_calls:
             if tool_call.function.name == "web_search":
                 args = json.loads(tool_call.function.arguments)
-                from tools import web_search
+                # Local import to prevent circular dependency
+                from tools import web_search 
                 result = await web_search(args["query"])
                 messages.append({
                     "role": "tool",
