@@ -15,7 +15,8 @@ Answer directly and concisely.
 
 FORMATTING RULES (CRITICAL - YOU MUST OBEY):
 1. STRICT TELEGRAM HTML ONLY: You are restricted to ONLY these tags: <b>, <i>, <u>, <s>, <code>, <pre>, <blockquote>. 
-   - NEVER use <br>, <p>, <ul>, <li>, <div>, or standard Markdown like ** or ##.
+   - NEVER use <br>, <p>, <ul>, <ol>, <li>, <div>, or standard Markdown like ** or ##.
+   - For lists, use standard text bullets (• or -). DO NOT use HTML list tags.
 2. MAXIMIZE FORMATTING: You must heavily style your response!
    - Extensively use <b> for keywords, important terms, numbers, and names.
    - Extensively use <i> for secondary emphasis or alternative terms.
@@ -24,7 +25,7 @@ FORMATTING RULES (CRITICAL - YOU MUST OBEY):
 4. TAG CLOSING: You must properly close every HTML tag you open.
 
 Keep responses focused and not too long.
-Use a direct tone with no filler phrases (example: do not say "Great question!").
+Use a direct tone with no filler phrases.
 Be honest: if you are uncertain, say "I'm not sure".
 Never add bullshit unless the user explicitly asks for it.
 Provide extra context only when asked.
@@ -95,6 +96,7 @@ async def process_prompt(user_id: int, prompt: str) -> str:
         if not msg.tool_calls:
             user_histories[user_id].append({"role": "user", "content": prompt})
             user_histories[user_id].append({"role": "assistant", "content": msg.content})
+            # Keep history from growing indefinitely (last 20 turns)
             if len(user_histories[user_id]) > 20:
                 user_histories[user_id] = user_histories[user_id][-20:]
             return msg.content or "I have no response."
@@ -102,6 +104,7 @@ async def process_prompt(user_id: int, prompt: str) -> str:
         for tool_call in msg.tool_calls:
             if tool_call.function.name == "web_search":
                 args = json.loads(tool_call.function.arguments)
+                # Local import to prevent circular dependency
                 from tools import web_search 
                 result = await web_search(args["query"])
                 messages.append({
