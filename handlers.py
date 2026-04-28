@@ -89,7 +89,7 @@ async def cmd_imagine(message: Message, bot: Bot):
         await bot.delete_message(loading.chat.id, loading.message_id)
         await message.answer("❌ Image generation failed.", reply_to_message_id=message.message_id)
 
-@router.message(F.text & \~F.text.startswith("/"))
+@router.message(F.text & ~F.text.startswith("/"))
 async def handle_any_message(message: Message, bot: Bot):
     """New UX: ⏳ → delete → final answer as proper quoted reply"""
     loading = await message.answer(
