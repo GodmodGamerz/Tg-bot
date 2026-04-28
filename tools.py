@@ -1,47 +1,33 @@
 import asyncio
 import logging
-from duckduckgo_search import DDGS  # Changed from AsyncDDGS
+from duckduckgo_search import DDGS 
 from tavily import TavilyClient
-from config import Config
 
 logger = logging.getLogger(__name__)
 
-# Initialize Tavily with your key from config
-tavily_client = TavilyClient(api_key=Config.TAVILY_API_KEY) if Config.TAVILY_API_KEY else None
+# --- HARDCODED KEY FOR TESTING ---
+TAVILY_API_KEY = "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"
+
+try:
+    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+except Exception as e:
+    logger.error(f"Failed to initialize Tavily: {e}")
+    tavily_client = None
 
 async def web_search(query: str, max_results: int = 8) -> str:
-    """Primary: Tavily (Premium). Fallback: DuckDuckGo (Free)."""
+    """Primary: DuckDuckGo (Free). Fallback: Tavily (Premium)."""
     
-    # 1. Try Tavily first (as it provides better RAG-optimized results)
-    if tavily_client:
-        try:
-            # We run the synchronous Tavily search in a separate thread to keep the bot async
-            results = await asyncio.to_thread(
-                tavily_client.search, 
-                query=query, 
-                search_depth="advanced", 
-                max_results=max_results
-            )
-            
-            if results.get("results"):
-                formatted = "\n\n".join(
-                    f"🔎 <b>{r['title']}</b>\n{r['content'][:300]}...\n<i>Source: {r['url']}</i>" 
-                    for r in results.get("results", [])
-                )
-                return f"<b>Tavily Search Results for '{query}':</b>\n\n{formatted}"
-        except Exception as e:
-            logger.warning(f"Tavily search failed, falling back to DuckDuckGo: {e}")
-    
-    # 2. Fallback to DuckDuckGo using the new DDGS 6.x/7.x logic
+    # 1. Try DuckDuckGo first
     try:
-        # DDGS().text() now returns a generator/list directly. 
-        # We wrap it in to_thread to prevent blocking the aiogram event loop.
         def ddg_sync():
             with DDGS() as ddgs:
-                # We convert to a list immediately to capture the results
                 return list(ddgs.text(query, max_results=max_results))
 
-        results = await asyncio.to_thread(ddg_sync)
+        # 10-second timeout to prevent infinite hanging
+        results = await asyncio.wait_for(
+            asyncio.to_thread(ddg_sync),
+            timeout=10.0
+        )
         
         if results:
             formatted = "\n\n".join(
@@ -50,7 +36,34 @@ async def web_search(query: str, max_results: int = 8) -> str:
             )
             return f"<b>DuckDuckGo Results for '{query}':</b>\n\n{formatted}"
             
+    except asyncio.TimeoutError:
+        logger.warning("DuckDuckGo search timed out after 10s! Falling back to Tavily.")
     except Exception as e:
-        logger.error(f"DuckDuckGo search failed: {e}")
+        logger.warning(f"DuckDuckGo search failed: {e}")
         
+    # 2. Fallback to Tavily if DDG fails
+    if tavily_client:
+        try:
+            results = await asyncio.wait_for(
+                asyncio.to_thread(
+                    tavily_client.search, 
+                    query=query, 
+                    search_depth="advanced", 
+                    max_results=max_results
+                ),
+                timeout=10.0
+            )
+            
+            if results.get("results"):
+                formatted = "\n\n".join(
+                    f"🔎 <b>{r['title']}</b>\n{r['content'][:300]}...\n<i>Source: {r['url']}</i>" 
+                    for r in results.get("results", [])
+                )
+                return f"<b>Tavily Search Results for '{query}':</b>\n\n{formatted}"
+                
+        except asyncio.TimeoutError:
+            logger.error("Tavily search also timed out!")
+        except Exception as e:
+            logger.error(f"Tavily search failed: {e}")
+    
     return "❌ No search results available at the moment."
