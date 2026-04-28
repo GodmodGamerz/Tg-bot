@@ -10,7 +10,7 @@ from config import Config
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Image client (same OpenAI-compatible client)
+# Image client
 image_client = AsyncOpenAI(
     api_key=Config.OPENAI_API_KEY,
     base_url=Config.OPENAI_BASE_URL or "https://api.openai.com/v1"
@@ -19,14 +19,13 @@ image_client = AsyncOpenAI(
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer(
-        "👋 Hi! I'm your AI assistant with real-time web search and image generation.\n\n"
+        "👋 Hi! I'm AlienLM with real-time web search and image generation.\n\n"
         "Just chat normally or use /imagine <prompt>\n"
         "Type /model to change AI model"
     )
 
 @router.message(Command("model"))
 async def cmd_model(message: Message):
-    """Show model selection buttons"""
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🟢 Nemotron", callback_data="set_model:nvidia/nemotron-3-super-120b-a12b")],
@@ -43,14 +42,10 @@ async def cmd_model(message: Message):
 
 @router.callback_query(F.data.startswith("set_model:"))
 async def callback_set_model(callback):
-    """Handle model button click"""
     model = callback.data.split(":", 1)[1]
     set_user_model(callback.from_user.id, model)
-    
-    # Find nice name
     name_map = {v: k for k, v in Config.AVAILABLE_MODELS.items()}
     nice_name = name_map.get(model, model)
-    
     await callback.message.edit_text(
         f"✅ Model changed to <b>{nice_name}</b> ({model})",
         parse_mode="HTML"
@@ -64,7 +59,7 @@ async def cmd_imagine(message: Message, bot: Bot):
         await message.answer("Usage: /imagine a cute cat astronaut")
         return
 
-    # Show loading with quote
+    # Send loading with quote
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
@@ -86,20 +81,17 @@ async def cmd_imagine(message: Message, bot: Bot):
         await bot.delete_message(loading.chat.id, loading.message_id)
         await message.answer_photo(
             photo=image_url,
-            caption=f"🖼️ Generated with {Config.IMAGE_MODEL or 'dall-e-3'}\nPrompt: {prompt}",
-            reply_to_message_id=message.message_id
+            caption=f"🖼️ Generated\nPrompt: {prompt}",
+            reply_to_message_id=message.message_id  # ← This creates the clean quote
         )
     except Exception as e:
         logger.error(f"Image gen error: {e}")
-        await bot.edit_message_text(
-            chat_id=loading.chat.id,
-            message_id=loading.message_id,
-            text=f"❌ Image generation failed: {str(e)[:200]}"
-        )
+        await bot.delete_message(loading.chat.id, loading.message_id)
+        await message.answer("❌ Image generation failed.", reply_to_message_id=message.message_id)
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(F.text & \~F.text.startswith("/"))
 async def handle_any_message(message: Message, bot: Bot):
-    """Main chat flow: immediate ⏳ → LLM + tools → edit message"""
+    """New UX: ⏳ → delete → final answer as proper quoted reply"""
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
@@ -113,15 +105,17 @@ async def handle_any_message(message: Message, bot: Bot):
             user_id=message.from_user.id,
             prompt=message.text
         )
-        await bot.edit_message_text(
-            chat_id=message.chat.id,
-            message_id=loading.message_id,
-            text=response_text
+        
+        # Delete loading and send final answer as proper reply
+        await bot.delete_message(loading.chat.id, loading.message_id)
+        await message.answer(
+            text=response_text,
+            reply_to_message_id=message.message_id  # ← This is the key change you wanted
         )
     except Exception as e:
         logger.error(f"LLM error: {e}")
-        await bot.edit_message_text(
-            chat_id=message.chat.id,
-            message_id=loading.message_id,
-            text=f"❌ Sorry, something went wrong: {str(e)[:150]}"
+        await bot.delete_message(loading.chat.id, loading.message_id)
+        await message.answer(
+            "❌ Sorry, something went wrong.",
+            reply_to_message_id=message.message_id
     )
