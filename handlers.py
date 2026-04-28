@@ -31,7 +31,8 @@ async def cmd_model(message: Message):
         inline_keyboard=[
             [InlineKeyboardButton(text="🟢 Nemotron (Science/Math)", callback_data="set_model:nvidia/nemotron-3-super-120b-a12b")],
             [InlineKeyboardButton(text="🔵 GPT (Reasoning)", callback_data="set_model:openai/gpt-oss-120b")],
-            [InlineKeyboardButton(text="🔴 DeepSeek (Fast Logic)", callback_data="set_model:deepseek-ai/deepseek-v4-pro")]
+            # Changed the ID below to the Flash version
+            [InlineKeyboardButton(text="⚡ DeepSeek (Flash)", callback_data="set_model:deepseek-ai/deepseek-v4-flash")] 
         ]
     )
     current = get_user_model(message.from_user.id)
@@ -40,6 +41,7 @@ async def cmd_model(message: Message):
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+
 
 @router.callback_query(F.data.startswith("set_model:"))
 async def callback_set_model(callback):
