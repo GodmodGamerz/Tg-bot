@@ -10,6 +10,7 @@ from config import Config
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Image client (same OpenAI-compatible client)
 image_client = AsyncOpenAI(
     api_key=Config.OPENAI_API_KEY,
     base_url=Config.OPENAI_BASE_URL or "https://api.openai.com/v1"
@@ -41,7 +42,7 @@ async def cmd_model(message: Message):
     )
 
 @router.callback_query(F.data.startswith("set_model:"))
-async def callback_set_model(callback, bot: Bot):
+async def callback_set_model(callback):
     """Handle model button click"""
     model = callback.data.split(":", 1)[1]
     set_user_model(callback.from_user.id, model)
@@ -58,12 +59,12 @@ async def callback_set_model(callback, bot: Bot):
 
 @router.message(Command("imagine"))
 async def cmd_imagine(message: Message, bot: Bot):
-    # ... (same as before - unchanged)
     prompt = message.text.replace("/imagine", "").strip()
     if not prompt:
         await message.answer("Usage: /imagine a cute cat astronaut")
         return
 
+    # Show loading with quote
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
@@ -85,7 +86,7 @@ async def cmd_imagine(message: Message, bot: Bot):
         await bot.delete_message(loading.chat.id, loading.message_id)
         await message.answer_photo(
             photo=image_url,
-            caption=f"🖼️ Generated\nPrompt: {prompt}",
+            caption=f"🖼️ Generated with {Config.IMAGE_MODEL or 'dall-e-3'}\nPrompt: {prompt}",
             reply_to_message_id=message.message_id
         )
     except Exception as e:
@@ -98,6 +99,7 @@ async def cmd_imagine(message: Message, bot: Bot):
 
 @router.message(F.text & \~F.text.startswith("/"))
 async def handle_any_message(message: Message, bot: Bot):
+    """Main chat flow: immediate ⏳ → LLM + tools → edit message"""
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
