@@ -46,7 +46,6 @@ async def callback_set_model(callback):
     model = callback.data.split(":", 1)[1]
     set_user_model(callback.from_user.id, model)
     
-    # Check if AVAILABLE_MODELS is in Config, otherwise just use the raw ID
     name_map = {v: k for k, v in getattr(Config, "AVAILABLE_MODELS", {}).items()}
     nice_name = name_map.get(model, model)
     
@@ -63,7 +62,6 @@ async def cmd_imagine(message: Message, bot: Bot):
         await message.answer("Usage: /imagine a cute cat astronaut")
         return
 
-    # Send loading state with quote
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
@@ -95,7 +93,7 @@ async def cmd_imagine(message: Message, bot: Bot):
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_any_message(message: Message, bot: Bot):
-    """Main chat flow: ⏳ -> Fetch Answer -> Chunk if needed -> Clean Reply"""
+    """Main chat flow: ⏳ -> Fetch Answer -> Chunk if needed -> Clean Reply with Fallback"""
     loading = await message.answer(
         text="⏳",
         reply_parameters=ReplyParameters(
@@ -105,34 +103,38 @@ async def handle_any_message(message: Message, bot: Bot):
     )
 
     try:
-        # Get raw response formatted with AI's own HTML tags
         response_text = await process_prompt(
             user_id=message.from_user.id,
             prompt=message.text
         )
         
-        # Telegram limit is 4096. We slice at 4000 just to be safe.
+        # Telegram limit is 4096. We slice at 4000.
         MAX_LENGTH = 4000
         chunks = [response_text[i:i + MAX_LENGTH] for i in range(0, len(response_text), MAX_LENGTH)]
         
-        # Delete the hourglass ⏳
         await bot.delete_message(loading.chat.id, loading.message_id)
         
-        # Send text in sequential chunks
+        # Send text in sequential chunks with a safety net for HTML errors
         for i, chunk in enumerate(chunks):
-            if i == 0:
-                # First chunk naturally replies to user's question
+            reply_id = message.message_id if i == 0 else None
+            
+            try:
                 await message.answer(
                     text=chunk,
-                    reply_to_message_id=message.message_id,
+                    reply_to_message_id=reply_id,
                     parse_mode="HTML"
                 )
-            else:
-                # Subsequent chunks are sent silently below it
-                await message.answer(
-                    text=chunk,
-                    parse_mode="HTML"
-                )
+            except Exception as parse_error:
+                # If Telegram hates the HTML (can't parse entities), send raw text!
+                if "parse" in str(parse_error).lower() or "bad request" in str(parse_error).lower():
+                    logger.warning(f"HTML Parse Error caught. Sending raw text. Error: {parse_error}")
+                    await message.answer(
+                        text=f"⚠️ <i>[Formatting Error - Showing Raw Text]</i>\n\n{chunk}",
+                        reply_to_message_id=reply_id,
+                        parse_mode=None # Sending without HTML parser
+                    )
+                else:
+                    raise parse_error
 
     except Exception as e:
         logger.error(f"LLM error: {e}")
