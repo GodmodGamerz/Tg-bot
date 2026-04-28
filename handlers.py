@@ -97,7 +97,7 @@ async def cmd_imagine(message: Message, bot: Bot):
             text=f"❌ Image generation failed: {str(e)[:200]}"
         )
 
-@router.message(F.text & \~F.text.startswith("/"))
+@router.message(F.text & ~F.text.startswith("/"))
 async def handle_any_message(message: Message, bot: Bot):
     """Main chat flow: immediate ⏳ → LLM + tools → edit message"""
     loading = await message.answer(
