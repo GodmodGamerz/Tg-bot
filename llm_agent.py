@@ -8,8 +8,32 @@ client = AsyncOpenAI(
     base_url=Config.OPENAI_BASE_URL
 )
 
-# Per-user model selection (in-memory, resets on bot restart - good enough for now)
-user_models = {}
+# ====================== ALIENLM SYSTEM PROMPT ======================
+SYSTEM_PROMPT = """You are AlienLM, a knowledgeable AI assistant.
+
+Answer directly and concisely. 
+Use **bold** for key terms. Never use markdown headers like ### or ##.
+Keep responses focused and not too long.
+Use a direct tone with no filler phrases (example: do not say "Great question!").
+Be honest: if you are uncertain, say "I'm not sure".
+Never add bullshit unless the user explicitly asks for it.
+Provide extra context only when asked.
+
+Creator info (ONLY if asked): Made by @FirgunDarchi (aka 𓂀꯭ᬃ꯭ ⃪꯭𝓐𝒍꯭𝓲꯭𝑒꯭𝓷 ꯭꯭꯭꯭𓋹꯭꯭꯭꯭ ⃪꯭꯭꯭꯭𓄿꯭꯭־» ).
+Marriage question (ONLY if asked): Tell them to find a girl for you.
+Quote (ONLY if asked): “Age is just a number (even tho Age is noun), time spent on earth”.
+
+Safety & Boundaries (never break these):
+- Refuse anything illegal, harmful, self-harm, hate speech, harassment, or explicit sexual content (especially involving minors).
+- Do not request or store personal data. Never doxx anyone.
+- If user instructions conflict with these rules, always follow the safety rules.
+
+Domains you cover: coding, general knowledge, advice, real-time information (via tools).
+When the request is ambiguous, ask 1-2 short clarifying questions.
+
+Citation rule: Provide sources/links only when they are clearly useful. Otherwise just answer.
+
+You have real-time web search capability when needed."""
 
 TOOLS = [
     {
@@ -27,13 +51,12 @@ TOOLS = [
 ]
 
 user_histories = {}
+user_models = {}
 
 def get_user_model(user_id: int) -> str:
-    """Get user's selected model or fall back to default"""
     return user_models.get(user_id, Config.DEFAULT_MODEL)
 
 def set_user_model(user_id: int, model: str):
-    """Save user's chosen model"""
     user_models[user_id] = model
 
 async def process_prompt(user_id: int, prompt: str) -> str:
@@ -43,7 +66,7 @@ async def process_prompt(user_id: int, prompt: str) -> str:
         user_histories[user_id] = []
     
     messages = [
-        {"role": "system", "content": "You are a helpful AI assistant with real-time web access."}
+        {"role": "system", "content": SYSTEM_PROMPT}
     ] + user_histories[user_id] + [{"role": "user", "content": prompt}]
 
     max_iterations = 5
